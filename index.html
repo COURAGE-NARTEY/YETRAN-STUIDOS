@@ -616,6 +616,84 @@
                 width: 400px;
             }
         }
+
+        /* ===== View-only CV modal ===== */
+.cv-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.88);
+    z-index: 2000;
+    padding: 16px;
+}
+
+.cv-modal.open { display: block; }
+
+.cv-box {
+    position: relative;
+    max-width: 900px;
+    height: 100%;
+    margin: 0 auto;
+    background: #1f2330;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.cv-close {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    z-index: 3;
+    width: 40px;
+    height: 40px;
+    font-size: 28px;
+    line-height: 1;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 50%;
+}
+
+.cv-pages {
+    height: 100%;
+    overflow-y: auto;
+    padding: 56px 16px 16px;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
+.cv-pages canvas {
+    display: block;
+    margin: 0 auto 16px;
+    pointer-events: none;   /* blocks right-click "save image" and dragging */
+}
+
+.cv-status {
+    color: #fff;
+    text-align: center;
+    padding-top: 40px;
+}
+
+/* Faint watermark over the CV (discourages screenshots) */
+.cv-watermark {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-family: "League Spartan", sans-serif;
+    font-size: clamp(1.4rem, 6vw, 2.8rem);
+    color: rgba(32, 178, 170, 0.22);
+    transform: rotate(-30deg);
+}
+
+/* Block printing */
+@media print {
+    body { display: none !important; }
+}
     </style>
 </head>
 
@@ -731,7 +809,8 @@
 
             <div class="btn-row cta-row">
                 <a class="btn1 btn-link" href="mailto:narteycourage@gmail.com?subject=Job%20Opportunity%20/%20Hire%20Inquiry&body=Hi%20Courage%2C%0A%0AI%27d%20like%20to%20talk%20to%20you%20about%20a%20project%2Fjob%20opportunity.%0A%0A">Hire me &#128161;</a>
-                <a class="btn2 btn-link" href="Courage_Teye_Enoch_Nartey_CV.pdf" download>Download CV &#11015;</a>
+                <!-- <a class="btn2 btn-link" href="Courage_Teye_Enoch_Nartey_CV.pdf" download>Download CV &#11015;</a> -->
+                 <button class="btn2 btn-link" type="button" id="viewCvBtn">View CV &#128065;</button>
             </div>
         </div>
 
@@ -804,6 +883,87 @@
             });
         })();
     </script>
+
+    <!-- CV viewer modal -->
+<div class="cv-modal" id="cvModal" aria-hidden="true">
+    <div class="cv-box">
+        <button class="cv-close" id="cvClose" type="button" aria-label="Close CV">&times;</button>
+        <div class="cv-watermark">Courage Nartey · View only</div>
+        <div class="cv-pages" id="cvPages"></div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+    (function () {
+        // >>> CHANGE THIS if your PDF has a different name or folder <<<
+        var CV_URL = 'Courage_Teye_Enoch_Nartey_CV.pdf';
+
+        var modal = document.getElementById('cvModal');
+        var pages = document.getElementById('cvPages');
+        var loaded = false;
+
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        async function renderCv() {
+            if (loaded) return;
+            loaded = true;
+            pages.innerHTML = '<p class="cv-status">Loading CV…</p>';
+            try {
+                var pdf = await pdfjsLib.getDocument(CV_URL).promise;
+                pages.innerHTML = '';
+                var width = Math.min(pages.clientWidth - 32, 800);
+                var ratio = window.devicePixelRatio || 1;
+                for (var i = 1; i <= pdf.numPages; i++) {
+                    var page = await pdf.getPage(i);
+                    var base = page.getViewport({ scale: 1 });
+                    var scale = width / base.width;
+                    var vp = page.getViewport({ scale: scale * ratio });
+                    var canvas = document.createElement('canvas');
+                    canvas.width = vp.width;
+                    canvas.height = vp.height;
+                    canvas.style.width = width + 'px';
+                    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+                    pages.appendChild(canvas);
+                }
+            } catch (err) {
+                loaded = false;
+                pages.innerHTML = '<p class="cv-status">Sorry, the CV could not be loaded right now.</p>';
+            }
+        }
+
+        function openCv() {
+            modal.classList.add('open');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            renderCv();
+        }
+
+        function closeCv() {
+            modal.classList.remove('open');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+        }
+
+        document.getElementById('viewCvBtn').addEventListener('click', openCv);
+        document.getElementById('cvClose').addEventListener('click', closeCv);
+        modal.addEventListener('click', function (e) { if (e.target === modal) closeCv(); });
+
+        // Block right-click, drag, copy and save/print/copy shortcuts while the CV is open
+        ['contextmenu', 'dragstart', 'copy', 'cut', 'selectstart'].forEach(function (evt) {
+            modal.addEventListener(evt, function (e) { e.preventDefault(); });
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (!modal.classList.contains('open')) return;
+            if (e.key === 'Escape') { closeCv(); return; }
+            var k = e.key.toLowerCase();
+            if ((e.ctrlKey || e.metaKey) && ['s', 'p', 'c', 'u'].indexOf(k) !== -1) e.preventDefault();
+            if (e.key === 'PrintScreen' && navigator.clipboard) navigator.clipboard.writeText('');
+        });
+    })();
+</script>
 </body>
 
 </html>
